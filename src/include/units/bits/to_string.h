@@ -22,15 +22,21 @@
 
 #pragma once
 
+#include <units/bits/deduced_symbol_text.h>
+#include <units/bits/external/text_tools.h>
+#include <units/prefix.h>
 #include <units/derived_dimension.h>
+#include <sstream>
 
 namespace units::detail {
+
+inline constexpr basic_symbol_text base_multiplier("\u00D7 10", "x 10");
 
 template<typename Ratio>
 constexpr auto ratio_text()
 {
   if constexpr(Ratio::num == 1 && Ratio::den == 1 && Ratio::exp != 0) {
-    return basic_fixed_string("\u00D7 10") + superscript<Ratio::exp>() + basic_fixed_string(" ");
+    return base_multiplier + superscript<Ratio::exp>() + basic_fixed_string(" ");
   }
   else if constexpr(Ratio::num != 1 || Ratio::den != 1 || Ratio::exp != 0) {
     auto txt = basic_fixed_string("[") + regular<Ratio::num>();
@@ -39,14 +45,20 @@ constexpr auto ratio_text()
         return txt + basic_fixed_string("] ");
       }
       else {
-        return txt + basic_fixed_string(" \u00D7 10") + superscript<Ratio::exp>() +
+        return txt + " " + base_multiplier + superscript<Ratio::exp>() +
             basic_fixed_string("] ");
       }
     }
     else {
-      return txt + basic_fixed_string("/") + regular<Ratio::den>() +
-          basic_fixed_string(" \u00D7 10") + superscript<Ratio::exp>() +
-          basic_fixed_string("] ");
+      if constexpr(Ratio::exp == 0) {
+        return txt + basic_fixed_string("/") + regular<Ratio::den>() +
+            basic_fixed_string("] ");
+      }
+      else {
+        return txt + basic_fixed_string("/") + regular<Ratio::den>() +
+            " " + base_multiplier + superscript<Ratio::exp>() +
+            basic_fixed_string("] ");
+      }
     }
   }
   else {
@@ -54,7 +66,7 @@ constexpr auto ratio_text()
   }
 }
 
-template<typename Ratio, typename PrefixType>
+template<typename Ratio, typename PrefixFamily>
 constexpr auto prefix_or_ratio_text()
 {
   if constexpr(Ratio::num == 1 && Ratio::den == 1 && Ratio::exp == 0) {
@@ -62,11 +74,11 @@ constexpr auto prefix_or_ratio_text()
     return basic_fixed_string("");
   }
   else {
-    if constexpr (!std::same_as<PrefixType, no_prefix>) {
+    if constexpr (!std::is_same_v<PrefixFamily, no_prefix>) {
       // try to form a prefix
-      using prefix = downcast<detail::prefix_base<PrefixType, Ratio>>;
+      using prefix = downcast<detail::prefix_base<PrefixFamily, Ratio>>;
 
-      if constexpr(!std::same_as<prefix, prefix_base<PrefixType, Ratio>>) {
+      if constexpr(!std::is_same_v<prefix, prefix_base<PrefixFamily, Ratio>>) {
         // print as a prefixed unit
         return prefix::symbol;
       }
@@ -95,20 +107,33 @@ constexpr auto derived_dimension_unit_text(exp_list<Es...> list)
   return derived_dimension_unit_text(list, std::index_sequence_for<Es...>());
 }
 
-template<typename... Es>
-constexpr bool all_named(exp_list<Es...>)
+template<Exponent... Es>
+constexpr auto exp_list_with_named_units(exp_list<Es...>);
+
+template<Exponent Exp>
+constexpr auto exp_list_with_named_units(Exp)
 {
-  return (dimension_unit<typename Es::dimension>::is_named && ...);
+  using dim = Exp::dimension;
+  if constexpr(dimension_unit<dim>::is_named) {
+    return exp_list<Exp>();
+  }
+  else {
+    using recipe = dim::recipe;
+    return exp_list_with_named_units(recipe());
+  }
+}
+
+template<Exponent... Es>
+constexpr auto exp_list_with_named_units(exp_list<Es...>)
+{
+  return type_list_join<decltype(exp_list_with_named_units(Es()))...>();
 }
 
 template<Dimension Dim>
 constexpr auto derived_dimension_unit_text()
 {
-  using recipe = typename Dim::recipe;
-  if constexpr(all_named(recipe()))
-    return derived_dimension_unit_text(recipe());
-  else
-    return derived_dimension_unit_text(typename Dim::exponents());
+  using recipe = Dim::recipe;
+  return derived_dimension_unit_text(exp_list_with_named_units(recipe()));
 }
 
 // TODO Inline below concept when switched to gcc-10
@@ -123,18 +148,32 @@ constexpr auto unit_text()
     return U::symbol;
   }
   else {
-    // print as a prefix or ratio of a reference unit
-    auto prefix_txt = prefix_or_ratio_text<typename U::ratio, typename U::reference::prefix_type>();
+    // print as a prefix or ratio of a coherent unit
+    using coherent_unit = dimension_unit<Dim>;
+    using ratio = ratio_divide<typename U::ratio, typename coherent_unit::ratio>;
+    auto prefix_txt = prefix_or_ratio_text<ratio, typename U::reference::prefix_family>();
 
-    if constexpr(has_symbol<typename U::reference>) {
-      // use predefined reference unit symbol
-      return prefix_txt + U::reference::symbol;
+    if constexpr(has_symbol<coherent_unit>) {
+      // use predefined coherent unit symbol
+      return prefix_txt + coherent_unit::symbol;
     }
     else {
       // use derived dimension ingredients to create a unit symbol
       return prefix_txt + derived_dimension_unit_text<Dim>();
     }
   }
+}
+
+template<typename CharT, class Traits, Quantity Q>
+std::basic_string<CharT> to_string(const Q& q)
+{
+  std::basic_ostringstream<CharT, Traits> s;
+  s << q.count();
+  constexpr auto symbol = unit_text<typename Q::dimension, typename Q::unit>();
+  if constexpr (symbol.standard().size()) {
+    s << " " << symbol.standard();
+  }
+  return s.str();
 }
 
 }  // namespace units::detail

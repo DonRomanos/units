@@ -11,20 +11,20 @@ Here is a small example of possible operations:
 
 ```cpp
 // simple numeric operations
-static_assert(10km / 2 == 5km);
+static_assert(10q_km / 2 == 5q_km);
 
 // unit conversions
-static_assert(1h == 3600s);
-static_assert(1km + 1m == 1001m);
+static_assert(1q_h == 3600q_s);
+static_assert(1q_km + 1q_m == 1001q_m);
 
 // dimension conversions
-static_assert(1km / 1s == 1000mps);
-static_assert(2kmph * 2h == 4km);
-static_assert(2km / 2kmph == 1h);
+static_assert(1q_km / 1q_s == 1000q_m_per_s);
+static_assert(2q_km_per_h * 2q_h == 4q_km);
+static_assert(2q_km / 2q_km_per_h == 1q_h);
 
-static_assert(1000 / 1s == 1kHz);
+static_assert(1000 / 1q_s == 1q_kHz);
 
-static_assert(10km / 5km == 2);
+static_assert(10q_km / 5q_km == 2);
 ```
 
 
@@ -48,7 +48,7 @@ static_assert(10km / 5km == 2);
 
 The most important concepts in the library are `Unit`, `Dimension`, and `Quantity`:
 
-![Design UML](design.png)
+![Design UML](_static/img/concepts.png)
 
 `Unit` is a basic building block of the library. Every dimension works with a concrete
 hierarchy of units. Such hierarchy defines a reference unit and often a few scaled versions of
@@ -78,7 +78,7 @@ where:
 
 ```cpp
 template<typename R>
-concept UnitRatio = Ratio<R> && (R::num * R::den > 0);
+concept UnitRatio = Ratio<R> && R::num > 0 && R::den > 0; // double negatives not allowed
 ```
 
 and `Ratio` is satisfied by any instantiation of `units::ratio<Num, Den, Exp>`.
@@ -86,7 +86,7 @@ and `Ratio` is satisfied by any instantiation of `units::ratio<Num, Den, Exp>`.
 The `scaled_unit` type is a framework's private type and the user should never instantiate it directly.
 The public user interface to create units consists of:
 
-![Units UML](units.png)
+![Units UML](_static/img/units.png)
 
 All below class templates indirectly derive from a `scaled_unit` class template and satisfy a
 `Unit` concept:
@@ -97,12 +97,12 @@ All below class templates indirectly derive from a `scaled_unit` class template 
   - Defines a named, in most cases base or coherent unit that is then passed to a dimension's
     definition.
   - A named unit may be used by other units defined with the prefix of the same type, unless
-    `no_prefix` is provided for `PrefixType` template parameter (in such a case it is impossible
+    `no_prefix` is provided for `PrefixFamily` template parameter (in such a case it is impossible
     to define a prefixed unit based on this one).
 - `named_scaled_unit`
   - Defines a new named unit that is a scaled version of another unit.
   - Such unit can be used by other units defined with the prefix of the same type, unless
-    `no_prefix` is provided for `PrefixType` template parameter (in such a case it is impossible
+    `no_prefix` is provided for `PrefixFamily` template parameter (in such a case it is impossible
     to define a prefixed unit based on this one).
 - `prefixed_unit`
   - Defines a new unit that is a scaled version of another unit by the provided prefix.
@@ -115,26 +115,26 @@ All below class templates indirectly derive from a `scaled_unit` class template 
   - All of the units provided should also be a named ones so it is possible to create a deduced
     symbol text.
 
-Some of the above types depend on `PrefixType` and `no_prefix`. `PrefixType` is a concept that
+Some of the above types depend on `PrefixFamily` and `no_prefix`. `PrefixFamily` is a concept that
 is defined as:
 
 ```cpp
 template<typename T>
-concept PrefixType = std::derived_from<T, prefix_type>;
+concept PrefixFamily = std::derived_from<T, prefix_family>;
 ```
 
-where `prefix_type` is just an empty tag type used to identify the beginning of prefix types
+where `prefix_family` is just an empty tag type used to identify the beginning of prefix types
 hierarchy and `no_prefix` is one of its children:
 
 ```cpp
-struct prefix_type {};
-struct no_prefix : prefix_type {};
+struct prefix_family {};
+struct no_prefix : prefix_family {};
 ```
 
 Concrete prefix derives from a `prefix` class template:
 
 ```cpp
-template<typename Child, PrefixType PT, basic_fixed_string Symbol, Ratio R>
+template<typename Child, PrefixFamily PT, basic_fixed_string Symbol, Ratio R>
   requires (!std::same_as<PT, no_prefix>)
 struct prefix;
 ```
@@ -151,7 +151,7 @@ Coming back to units, here are a few examples of unit definitions:
 namespace units::si {
 
 // prefixes
-struct prefix : prefix_type {};
+struct prefix : prefix_family {};
 struct centi : units::prefix<centi, prefix, "c", ratio<1, 1, -2>> {};
 struct kilo : units::prefix<kilo, prefix, "k", ratio<1, 1, 3>> {};
 
@@ -237,9 +237,9 @@ struct dim_luminous_intensity : base_dimension<"J", candela> {};
 }
 ```
 
-All other physical dimensions are derived from those.
+All other derived quantities of SI are composed from those.
 
-There are two reasons why `base_dimension` gets a unit as its template parameter. First, the
+There are two reasons why a `base_dimension` gets a unit as its template parameter. First, the
 base unit is needed for the text output of unnamed derived units. Second, there is more than
 one system of physical units. For example CGS definitions look as follows:
 
@@ -293,11 +293,11 @@ Exponents are implemented with `exp` class template that provides an information
 dimension and its (possibly fractional) exponent in a derived dimension.
 
 ```cpp
-template<Dimension Dim, int Num, int Den = 1>
+template<Dimension Dim, std::intmax_t Num, std::intmax_t Den = 1>
 struct exp {
   using dimension = Dim;
-  static constexpr int num = Num;
-  static constexpr int den = Den;
+  static constexpr std::intmax_t num = Num;
+  static constexpr std::intmax_t den = Den;
 };
 ```
 
@@ -377,7 +377,7 @@ struct dim_power : derived_dimension<dim_power, watt,
 If as a result of dimensional computation the library framework will generate a derived
 dimension that was not predefined by the user than the instance of
 `unknown_dimension<Exponent...>`. The coherent unit of such an unknown dimension is
-`scaled_unit<ratio<1>, unknown_unit>`.
+`scaled_unit<ratio<1>, unknown_coherent_unit>`.
 
 
 ## `Quantity`
@@ -458,12 +458,12 @@ has an associated UDL. For example:
 namespace si::inline literals {
 
 // m
-constexpr auto operator"" m(unsigned long long l) { return length<metre, std::int64_t>(l); }
-constexpr auto operator"" m(long double l) { return length<metre, long double>(l); }
+constexpr auto operator"" q_m(unsigned long long l) { return length<metre, std::int64_t>(l); }
+constexpr auto operator"" q_m(long double l) { return length<metre, long double>(l); }
 
 // km
-constexpr auto operator"" km(unsigned long long l) { return length<kilometre, std::int64_t>(l); }
-constexpr auto operator"" km(long double l) { return length<kilometre, long double>(l); }
+constexpr auto operator"" q_km(unsigned long long l) { return length<kilometre, std::int64_t>(l); }
+constexpr auto operator"" q_km(long double l) { return length<kilometre, long double>(l); }
 
 }
 ```
@@ -508,7 +508,7 @@ a series of checks:
   dimension:
   - prefix:
     - if ratio of the scaled unit is `1`, than no prefix is being printed,
-    - otherwise, if `PrefixType` template parameter of a reference unit is different than
+    - otherwise, if `PrefixFamily` template parameter of a reference unit is different than
       `no_prefix`, and if the ratio of scaled unit matches the ratio of a prefix of a specified
       type, than the symbol of this prefix will be used,
     - otherwise, non-standard ratio (i.e. `2 [60]Hz`) will be printed.
@@ -574,7 +574,7 @@ If the `units-specs` is omitted, the `quantity` object is formatted as if by str
 additional padding and adjustments as specified by the format specifiers.
 
 ```cpp
-std::string s = fmt::format("{:=>12}", 120_kmph); // value of s is "====120 km/h"
+std::string s = fmt::format("{:=>12}", 120q_km_per_h); // value of s is "====120 km/h"
 ```
 
 
@@ -620,7 +620,7 @@ User-friendly, short name printed by the compiler and the debugger.
 To fix it we have to provide a strong type. As we do not have opaque/strong typedefs
 in the language we have to use inheritance:
 
-![UML](downcast_1.png)
+![UML](_static/img/downcast_1.png)
 
 This gives us a nice looking strong type but does not solve the problem of how to switch from
 a long instantiation of a `derived_dimension_base` class template that was generated by the
@@ -636,7 +636,7 @@ specific base class template instantiation.
 
 Downcasting facility is provided by injecting two classes into our hierarchy:
 
-![UML](downcast_2.png)
+![UML](_static/img/downcast_2.png)
 
 In the above example `dim_area` is a downcasting target (child class) and a specific
 `detail::derived_dimension` class template instantiation is a downcasting source (base class).
@@ -732,14 +732,14 @@ predefined by the user in the downcasting facility. A typical example of such a 
 temporary results of calculations:
 
 ```cpp
-units::Length auto d1 = 123m;
-units::Time auto t1 = 10s;
+units::Length auto d1 = 123q_m;
+units::Time auto t1 = 10q_s;
 units::Velocity auto v1 = avg_speed(d1, t1);
 
-auto temp1 = v1 * 50m;  // intermediate unknown dimension
+auto temp1 = v1 * 50q_m;  // intermediate unknown dimension
 
-units::Velocity auto v2 = temp1 / 100m; // back to known dimensions again
-units::Length auto d2 = v2 * 60s;
+units::Velocity auto v2 = temp1 / 100q_m; // back to known dimensions again
+units::Length auto d2 = v2 * 60q_s;
 ```
 
 To provide support to form an unknown derived dimension that could be than be converted to a
@@ -747,13 +747,13 @@ known one with a correct unit, and also to improve the user experience and clear
 it is an unknown dimension the library framework will provide an instance of:
 
 ```cpp
-struct unknown_unit : unit<unknown_unit> {};
+struct unknown_coherent_unit : unit<unknown_coherent_unit> {};
 
 template<Exponent E, Exponent... ERest>
 struct unknown_dimension : derived_dimension<unknown_dimension<E, ERest...>,
-                                             scaled_unit<ratio<1>, unknown_unit>,
+                                             scaled_unit<ratio<1>, unknown_coherent_unit>,
                                              E, ERest...> {
-  using coherent_unit = scaled_unit<ratio<1>, unknown_unit>;
+  using coherent_unit = scaled_unit<ratio<1>, unknown_coherent_unit>;
 };
 ```
 
@@ -761,7 +761,7 @@ with this the error log or a debugger breakpoint involving a `temp1` type will i
 
 ```text
 units::quantity<units::unknown_dimension<units::exp<units::si::dim_length, 2, 1>,
-units::exp<units::si::dim_time, -1, 1> >, units::unknown_unit, long int>
+units::exp<units::si::dim_time, -1, 1> >, units::unknown_coherent_unit, long int>
 ```
 
 
@@ -781,7 +781,7 @@ adds support for digital information quantities. In summary it adds:
     ```cpp
     namespace units::data {
 
-    struct prefix : prefix_type {};
+    struct prefix : prefix_family {};
 
     struct kibi : units::prefix<kibi, prefix, "Ki", ratio<    1'024>> {};
     struct mebi : units::prefix<mebi, prefix, "Mi", ratio<1'048'576>> {};
@@ -825,12 +825,12 @@ adds support for digital information quantities. In summary it adds:
     namespace units::data::inline literals {
 
     // bits
-    constexpr auto operator""b(unsigned long long l) { return information<bit, std::int64_t>(l); }
-    constexpr auto operator""Kib(unsigned long long l) { return information<kibibit, std::int64_t>(l); }
+    constexpr auto operator"" q_b(unsigned long long l) { return information<bit, std::int64_t>(l); }
+    constexpr auto operator"" q_Kib(unsigned long long l) { return information<kibibit, std::int64_t>(l); }
 
     // bytes
-    constexpr auto operator""B(unsigned long long l) { return information<byte, std::int64_t>(l); }
-    constexpr auto operator""KiB(unsigned long long l) { return information<kibibyte, std::int64_t>(l); }
+    constexpr auto operator"" q_B(unsigned long long l) { return information<byte, std::int64_t>(l); }
+    constexpr auto operator"" q_KiB(unsigned long long l) { return information<kibibyte, std::int64_t>(l); }
 
     }
     ```
@@ -854,8 +854,8 @@ adds support for digital information quantities. In summary it adds:
     inline namespace literals {
 
     // bits
-    constexpr auto operator""_bps(unsigned long long l) { return bitrate<bit_per_second, std::int64_t>(l); }
-    constexpr auto operator""_Kibps(unsigned long long l) { return bitrate<kibibit_per_second, std::int64_t>(l); }
+    constexpr auto operator"" q_b_per_s(unsigned long long l) { return bitrate<bit_per_second, std::int64_t>(l); }
+    constexpr auto operator"" q_Kib_per_s(unsigned long long l) { return bitrate<kibibit_per_second, std::int64_t>(l); }
 
     }
 
@@ -881,10 +881,15 @@ concept basic-arithmetic = // exposition only
 template<typename T>
 concept Scalar =
   (!Quantity<T>) &&
+  (!WrappedQuantity<T>) &&
   std::regular<T> &&
   std::totally_ordered<T> &&
   basic-arithmetic<T>;
 ```
+
+Where `WrappedQuantity` is a concept that applies `Quantity<typename T::value_type>` recursively
+on all nested types to check if `T` is not actually a wrapped quantity type (i.e. a vector or
+matrix of quantities).
 
 The above implies that the `Rep` type should provide at least:
 - default constructor, destructor, copy-constructor, and copy-assignment operator
@@ -893,7 +898,8 @@ The above implies that the `Rep` type should provide at least:
 - `operator-(Rep)`
 - `operator+(Rep, Rep)`, `operator-(Rep, Rep)`, `operator*(Rep, Rep)`, `operator*(Rep, Rep)`
 
-Above also requires that the `Rep` should be implicitly convertible from integral types (i.e. `int`) so a proper implicit converting constructor should be provided.
+Above also requires that the `Rep` should be implicitly convertible from integral types
+(i.e. `int`) so a proper implicit converting constructor should be provided.
 
 Moreover, in most cases to observe expected behavior `Rep` will have to be registered as a
 floating-point representation type by specializing `units::treat_as_floating_point` type
@@ -927,3 +933,33 @@ be enabled by providing a specialization of `quantity_values` type trait for `Re
 template<Scalar Rep>
 struct quantity_values;
 ```
+
+## FAQ
+
+1. Why all UDLs are prefixed with `q_` instead of just using unit symbol?
+
+    Usage of only unit symbols in UDLs would be a preferred approach (less to type, easier to
+    understand and maintain). However, while increasing the coverage for the library we learned
+    that there are a lot unit symbols that conflict with built-in types or numeric extensions.
+    A few of those are: `F` (farad), `J` (joule), `W` (watt), `K` (kelvin), `d` (day), `l` or
+    `L` (litre), `erg`, `ergps`. For a while we had to used `_` prefix to make the library work
+    at all but at some point we had to unify the naming and we came up with `q_` prefix which
+    results in a creation of quantity of a provided unit.
+
+2. Why dimensions depend on units and not vice versa?
+
+    Most of the libraries define units in terms of dimensions and this was also an initial
+    approach for this library. However it turns out that for such a design it is hard to provide
+    support for all the required scenarios.
+
+    The first of them is to support multiple unit systems (like SI, CGS, ...) where each of
+    can have a different base unit for the same dimension. Base quantity of dimension length in
+    SI has to know that it should use `m` to print the unit symbol to the text output, while
+    the same dimension for CGS should use `cm`. Also it helps in conversions among those systems.
+
+    The second one is to support natural units where more than one dimension can be measured
+    with the same unit (i.e. `GeV`). Also if someone will decide to implement a systems where
+    SI quantities of the same kind are expressed as different dimensions (i.e. height, width,
+    and depth) all of them will just be measured in meters.
+
+3. Why do we spell `metre` instead of `meter`?

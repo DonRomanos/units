@@ -23,17 +23,17 @@
 #pragma once
 
 #include <units/bits/external/downcasting.h>
-#include <units/bits/external/fixed_string.h>
 #include <units/ratio.h>
+#include <units/symbol_text.h>
 
 namespace units {
 
 /**
- * @brief The base for all prefix types
+ * @brief The base for all prefix families
  *
- * Every prefix type should inherit from this type to satisfy PrefixType concept.
+ * Every prefix family should inherit from this type to satisfy PrefixFamily concept.
  */
-struct prefix_type {};
+struct prefix_family {};
 
 /**
  * @brief No prefix possible for the unit
@@ -41,13 +41,13 @@ struct prefix_type {};
  * This is a special prefix type tag specifying that the unit can not be scaled with any kind
  * of the prefix.
  */
-struct no_prefix : prefix_type {};
+struct no_prefix : prefix_family {};
 
 namespace detail {
 
-template<PrefixType PT, Ratio R>
+template<PrefixFamily PT, Ratio R>
 struct prefix_base : downcast_base<prefix_base<PT, R>> {
-  using prefix_type = PT;
+  using prefix_family = PT;
   using ratio = R;
 };
 
@@ -68,9 +68,9 @@ struct prefix_base : downcast_base<prefix_base<PT, R>> {
  * @tparam Symbol a text representation of the prefix
  * @tparam R factor to be used to scale a unit
  */
-template<typename Child, PrefixType PT, basic_fixed_string Symbol, Ratio R>
+template<typename Child, PrefixFamily PT, basic_symbol_text Symbol, Ratio R>
   requires (!std::same_as<PT, no_prefix>)
-struct prefix : downcast_child<Child, detail::prefix_base<PT, ratio<R::num, R::den, R::exp>>> {
+struct prefix : downcast_child<Child, detail::prefix_base<PT, R>> {
   static constexpr auto symbol = Symbol;
 };
 

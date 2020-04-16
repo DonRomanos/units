@@ -21,15 +21,14 @@
 # SOFTWARE.
 
 from conans import ConanFile, CMake, tools
-from conans.tools import load, Version
+from conans.tools import Version
 from conans.errors import ConanInvalidConfiguration
 import re
-import os
 
 
 def get_version():
     try:
-        content = load("src/CMakeLists.txt")
+        content = tools.load("src/CMakeLists.txt")
         version = re.search(r"project\([^\)]+VERSION (\d+\.\d+\.\d+)[^\)]*\)", content).group(1)
         return version.strip()
     except Exception:
@@ -44,45 +43,59 @@ class UnitsConan(ConanFile):
     url = "https://github.com/mpusz/units"
     description = "Physical Units library for C++"
     exports = ["LICENSE.md"]
-    exports_sources = ["src/*", "test/*", "cmake/*", "example/*","CMakeLists.txt"]
+    exports_sources = ["docs/*", "src/*", "test/*", "cmake/*", "example/*","CMakeLists.txt"]
     settings = "os", "compiler", "build_type", "arch"
     requires = (
         "fmt/6.1.0"
     )
-    build_requires = (
-        "Catch2/2.11.0@catchorg/stable"
-    )
+    # scm = {
+    #     "type": "git",
+    #     "url": "auto",
+    #     "revision": "auto",
+    #     "submodule": "recursive"
+    # }
     generators = "cmake"
 
     @property
     def _run_tests(self):
         return tools.get_env("CONAN_RUN_TESTS", False)
 
-    def configure(self):
-        if self.settings.compiler != "gcc":
-            raise ConanInvalidConfiguration("Library works only with gcc")
-        if Version(self.settings.compiler.version) < "9":
-            raise ConanInvalidConfiguration("Library requires at least gcc-9")
-        if self.settings.compiler.cppstd not in ["20", "gnu20"]:
-            raise ConanInvalidConfiguration("Library requires at least C++20 support")
-
     def _configure_cmake(self, folder="src"):
         cmake = CMake(self)
         if self._run_tests:
+            # developer's mode (unit tests, examples, documentation, restrictive compilation warnings, ...)
             cmake.configure()
         else:
-            cmake.configure(source_folder="src", build_folder="src")
+            # consumer's mode (library sources only)
+            cmake.configure(source_folder=folder)
         return cmake
 
+    def configure(self):
+        if self.settings.compiler != "gcc": # and self.settings.compiler != "clang":
+            raise ConanInvalidConfiguration("Library works only with gcc") # and clang")
+        if self.settings.compiler == "gcc" and Version(self.settings.compiler.version) < "9":
+            raise ConanInvalidConfiguration("Library requires at least g++-9")
+        if self.settings.compiler == "clang" and Version(self.settings.compiler.version) < "11":
+            raise ConanInvalidConfiguration("Library requires at least clang++-11")
+        if self.settings.compiler.cppstd not in ["20", "gnu20"]:
+            raise ConanInvalidConfiguration("Library requires at least C++20 support")
+
     def requirements(self):
-        if Version(self.settings.compiler.version) < "10":
+        if self.settings.compiler == "clang" or Version(self.settings.compiler.version) < "10":
             self.requires("range-v3/0.10.0@ericniebler/stable")
+
+    def build_requirements(self):
+        if self._run_tests:
+            self.build_requires("Catch2/2.11.0@catchorg/stable")
+            # TODO update doxygen to the latest version when available
+            self.build_requires("doxygen_installer/1.8.17@bincrafters/stable")
+            self.build_requires("linear_algebra/0.6.0@public-conan/testing")
 
     def build(self):
         cmake = self._configure_cmake()
         cmake.build()
         if self._run_tests:
-            self.run(os.path.join("bin", "unit_tests_runtime"), run_environment=True)
+            cmake.test(output_on_failure=True)
 
     def package(self):
         self.copy(pattern="LICENSE.md", dst="licenses")
@@ -90,7 +103,6 @@ class UnitsConan(ConanFile):
         cmake.install()
 
     def package_info(self):
-        self.cpp_info.includedirs = ['include']
         if self.settings.compiler == "gcc":
             self.cpp_info.cxxflags = [
                 "-Wno-literal-suffix",
@@ -102,6 +114,4 @@ class UnitsConan(ConanFile):
                 ])
 
     def package_id(self):
-        self.info.settings.clear()
-        self.info.settings.compiler = self.settings.compiler
-        self.info.settings.compiler.version = self.settings.compiler.version
+        self.info.header_only()

@@ -26,33 +26,30 @@
 
 namespace units::us {
 
-//https://en.wikipedia.org/wiki/Foot_(unit)#US_survey_foot
-//https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors#B6
-//struct foot : named_scaled_unit<foot,"ft(us)",no_prefix,ratio<3'048,1'000,-1>, si::metre> {};
-//################### causes integer overflow when converting for volume #######################
-struct foot : named_scaled_unit<foot,"ft(us)",no_prefix,ratio<1'524'003,5,-6>, si::metre> {};
-//#############################################################################################
+// https://en.wikipedia.org/wiki/Foot_(unit)#US_survey_foot
+// https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors#B6
+struct foot : named_scaled_unit<foot, "ft(us)", no_prefix, ratio<1'200, 3'937>, si::metre> {};
 
-//https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors#B6
-struct fathom : named_scaled_unit<fathom,"fathom(us)",no_prefix,ratio<6,1>,us::foot> {};
+// https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors#B6
+struct fathom : named_scaled_unit<fathom, "fathom(us)", no_prefix, ratio<6>, foot> {};
 
-//https://en.wikipedia.org/wiki/Mile#U.S._survey_mile
-//https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors#B6
-struct mile : named_scaled_unit<mile,"mi(us)",no_prefix,ratio<5280,1000,3>,us::foot> {};
+// https://en.wikipedia.org/wiki/Mile#U.S._survey_mile
+// https://www.nist.gov/pml/special-publication-811/nist-guide-si-appendix-b-conversion-factors#B6
+struct mile : named_scaled_unit<mile, "mi(us)", no_prefix, ratio<5280>, us::foot> {};
 
 inline namespace literals {
 
 // ft
-constexpr auto operator"" ft_us(unsigned long long l) { return si::length<units::us::foot, std::int64_t>(l); }
-constexpr auto operator"" ft_us(long double l) { return si::length<units::us::foot, long double>(l); }
+constexpr auto operator"" q_ft_us(unsigned long long l) { return si::length<units::us::foot, std::int64_t>(l); }
+constexpr auto operator"" q_ft_us(long double l) { return si::length<units::us::foot, long double>(l); }
 
 // fathom
-constexpr auto operator"" fathom_us(unsigned long long l) { return si::length<units::us::fathom, std::int64_t>(l); }
-constexpr auto operator"" fathom_us(long double l) { return si::length<units::us::fathom, long double>(l); }
+constexpr auto operator"" q_fathom_us(unsigned long long l) { return si::length<units::us::fathom, std::int64_t>(l); }
+constexpr auto operator"" q_fathom_us(long double l) { return si::length<units::us::fathom, long double>(l); }
 
 // ft
-constexpr auto operator"" mi_us(unsigned long long l) { return si::length<units::us::mile, std::int64_t>(l); }
-constexpr auto operator"" mi_us(long double l) { return si::length<units::us::mile, long double>(l); }
+constexpr auto operator"" q_mi_us(unsigned long long l) { return si::length<units::us::mile, std::int64_t>(l); }
+constexpr auto operator"" q_mi_us(long double l) { return si::length<units::us::mile, long double>(l); }
 
 }  // namespace literals
 

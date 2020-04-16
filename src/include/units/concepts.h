@@ -25,28 +25,20 @@
 #include <units/bits/external/downcasting.h>
 #include <units/bits/external/fixed_string.h>
 #include <units/bits/external/hacks.h>
-#include <units/bits/external/numeric_concepts.h>
 #include <units/bits/external/type_traits.h>
-#include <units/customization_points.h>
 
 namespace units {
 
-namespace detail {
+// PrefixFamily
+struct prefix_family;
 
-template<typename T, typename U = T>
-concept basic_arithmetic = // exposition only
-    std::magma<std::ranges::plus, T, U> &&
-    std::magma<std::ranges::minus, T, U> &&
-    std::magma<std::ranges::times, T, U> &&
-    std::magma<std::ranges::divided_by, T, U>;
-
-} // namespace detail
-
-// PrefixType
-struct prefix_type;
-
+/**
+ * @brief A concept matching a prefix family
+ * 
+ * Satisfied by all types derived from `prefix_family`
+ */
 template<typename T>
-concept PrefixType = std::derived_from<T, prefix_type>;
+concept PrefixFamily = std::derived_from<T, prefix_family>;
 
 // Prefix
 // TODO gcc:92150
@@ -56,11 +48,16 @@ concept PrefixType = std::derived_from<T, prefix_type>;
 //   template<typename T>
 //   inline constexpr bool is_prefix = false;
 
-//   template<typename PrefixType, Ratio R, basic_fixed_string Symbol>
-//   inline constexpr bool is_prefix<prefix<PrefixType, R, Symbol>> = true;
+//   template<typename PrefixFamily, Ratio R, basic_fixed_string Symbol>
+//   inline constexpr bool is_prefix<prefix<PrefixFamily, R, Symbol>> = true;
 
 // }  // namespace detail
 
+/**
+ * @brief A concept matching a symbol prefix
+ * 
+ * Satisfied by all instantiations of `prefix`.
+ */
 template<typename T>
 //  concept Prefix = detail::is_prefix<T>;
 concept Prefix = true;
@@ -73,22 +70,34 @@ inline constexpr bool is_ratio = false;
 
 } // namespace detail
 
+/**
+ * @brief A concept matching a ratio
+ * 
+ * Satisfied by all instantiations of `ratio`.
+ */
 template<typename T>
 concept Ratio = detail::is_ratio<T>;
 
-
-// UnitRatio
+/**
+ * @brief A concept matching unit's ratio
+ * 
+ * Satisfied by all types that satisfy `Ratio<R>` and for which `R::num > 0` and `R::den > 0`
+ */
 template<typename R>
-concept UnitRatio = Ratio<R> && (R::num * R::den > 0);
+concept UnitRatio = Ratio<R> && R::num > 0 && R::den > 0; // double negatives not allowed
 
 // Unit
 template<UnitRatio R, typename U>
 struct scaled_unit;
 
+/**
+ * @brief A concept matching all unit types in the library
+ * 
+ * Satisfied by all unit types derived from the instantiation of :class:`scaled_unit`.
+ */
 template<typename T>
 concept Unit = is_derived_from_instantiation<T, scaled_unit>;
 
-// BaseDimension
 template<basic_fixed_string Symbol, Unit U>
   requires U::is_named
 struct base_dimension;
@@ -112,6 +121,11 @@ inline constexpr bool is_base_dimension<base_dimension<Name, Params...>> = true;
 
 }  // namespace detail
 
+/**
+ * @brief A concept matching all base dimensions in the library.
+ * 
+ * Satisfied by all dimension types derived from the instantiation of `base_dimension`.
+ */
 template<typename T>
 concept BaseDimension = detail::is_base_dimension<typename T::base_type_workaround>;
 
@@ -123,6 +137,11 @@ inline constexpr bool is_exp = false;
 
 }  // namespace detail
 
+/**
+ * @brief A concept matching dimension's exponents.
+ * 
+ * Satisfied by all instantiations of :class:`exp`.
+ */
 template<typename T>
 concept Exponent = detail::is_exp<T>;
 
@@ -135,10 +154,20 @@ struct derived_dimension_base;
 
 } // namespace detail
 
+/**
+ * @brief A concept matching all derived dimensions in the library.
+ * 
+ * Satisfied by all dimension types derived from the instantiation of `detail::derived_dimension_base`.
+ */
 template<typename T>
 concept DerivedDimension = is_instantiation<downcast_base_t<T>, detail::derived_dimension_base>;
 
 // Dimension
+/**
+ * @brief A concept matching all dimensions in the library. 
+ * 
+ * Satisfied by all dimension types for which either `BaseDimension<T>` or `DerivedDimension<T>` is `true`.
+ */
 template<typename T>
 concept Dimension = BaseDimension<T> || DerivedDimension<T>;
 
@@ -163,6 +192,15 @@ struct dimension_unit_impl<D> {
 template<Dimension D>
 using dimension_unit = detail::dimension_unit_impl<D>::type;
 
+/**
+ * @brief A concept matching only units of a specified dimension.
+ * 
+ * Satisfied by all unit types that satisfy `Unit<U>`, `Dimension<D>`, and for which
+ * `U::reference` and `dimension_unit<D>::reference` denote the same unit type.
+ * 
+ * @tparam U Type to verify.
+ * @tparam D Dimension type to use for verification.
+ */
 template<typename U, typename D>
 concept UnitOf =
   Unit<U> &&
@@ -177,11 +215,70 @@ inline constexpr bool is_quantity = false;
 
 }  // namespace detail
 
+/**
+ * @brief A concept matching all quantities in the library.
+ * 
+ * Satisfied by all instantiations of :class:`quantity`.
+ */
 template<typename T>
 concept Quantity = detail::is_quantity<T>;
 
-// Scalar
+
+// WrappedQuantity
+namespace detail {
+
 template<typename T>
-concept Scalar = (!Quantity<T>) && std::regular<T> && std::totally_ordered<T> && detail::basic_arithmetic<T>;
+inline constexpr bool is_wrapped_quantity = false;
+
+template<typename T>
+  requires requires { typename T::value_type; }
+inline constexpr bool is_wrapped_quantity<T> = Quantity<typename T::value_type> || is_wrapped_quantity<typename T::value_type>;
+
+}  // namespace detail
+
+/**
+ * @brief A concept matching types that wrap quantity objects.
+ * 
+ * Satisfied by all wrapper types that satisfy `Quantity<typename T::value_type>`
+ * recursively (i.e. `std::optional<si::length<si::metre>>`).
+ */
+template<typename T>
+concept WrappedQuantity = detail::is_wrapped_quantity<T>;
+
+// Scalar
+
+namespace detail {
+
+template<typename T>
+concept constructible_from_integral =
+  // construction from an integral type
+  std::constructible_from<T, std::int64_t> && 
+  // unit scaling
+  std::regular_invocable<std::multiplies<>, T, T> &&
+  std::regular_invocable<std::divides<>, T, T>;
+
+template<typename T>
+concept not_constructible_from_integral =
+  // not construction from an integral type
+  (!std::constructible_from<T, std::int64_t>) && 
+
+  // scaling by the value from ratio
+  std::regular_invocable<std::multiplies<>, T, std::int64_t> &&
+  std::regular_invocable<std::multiplies<>, std::int64_t, T>; // &&
+  // std::regular_invocable<std::divides<>, T, std::int64_t>;  // TODO Uncomment when a bug in LA is fixed
+
+}  // namesapce detail
+
+/**
+ * @brief A concept matching non-Quantity types.
+ * 
+ * Satisfied by types that satisfy `(!Quantity<T>) && (!WrappedQuantity<T>) && std::regular<T>`.
+ */
+template<typename T>
+concept Scalar =
+  (!Quantity<T>) &&
+  (!WrappedQuantity<T>) &&
+  std::regular<T> &&
+  (detail::constructible_from_integral<T> || detail::not_constructible_from_integral<T>);
 
 }  // namespace units

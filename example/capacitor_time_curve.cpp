@@ -1,4 +1,3 @@
-
 /*
  Copyright (c) 2003-2020 Andy Little.
 
@@ -23,54 +22,39 @@
 
 #include <units/physical/si/capacitance.h>
 #include <units/physical/si/resistance.h>
-#include <units/physical/si/voltage.h>
 #include <units/physical/si/time.h>
+#include <units/physical/si/voltage.h>
 #include <cmath>
-
-namespace {
-   namespace voltage {
-
-       template <typename Rep = double>
-       using V = units::si::voltage<units::si::volt,Rep>;
-
-       template <typename Rep = double>
-       using mV = units::si::voltage<units::si::millivolt,Rep>;
-
-       template <typename Rep = double>
-       using uV = units::si::voltage<units::si::microvolt,Rep>;
-
-       template <typename Rep = double>
-       using nV = units::si::voltage<units::si::nanovolt,Rep>;
-
-       template <typename Rep = double>
-       using pV = units::si::voltage<units::si::picovolt,Rep>;
-   }
-}
-
 #include <iostream>
 
-using namespace units::si::literals;
 int main()
 {
-    std::cout << "mpusz/units capacitor time curve example...\n";
-    std::cout.setf(std::ios_base::fixed,std::ios_base::floatfield);
-    std::cout.precision(3);
+  using namespace units;
+  using namespace units::si;
 
-    constexpr auto  C = 0.47uF;
-    constexpr auto  V0 = 5.0V;
-    constexpr auto  R = 4.7kR;
+  std::cout << "mp-units capacitor time curve example...\n";
+  std::cout.setf(std::ios_base::fixed, std::ios_base::floatfield);
+  std::cout.precision(3);
 
-    for ( auto t = 0ms ; t <= 50ms; ++t  ){
+  constexpr auto C = 0.47q_uF;
+  constexpr auto V0 = 5.0q_V;
+  constexpr auto R = 4.7q_kR;
 
-        const auto  Vt = V0 * std::exp(-t / (R * C));
+  for (auto t = 0q_ms; t <= 50q_ms; ++t) {
+    const Voltage AUTO Vt = V0 * std::exp(-t / (R * C));
 
-        std::cout << "at " << t << " voltage is " ;
+    std::cout << "at " << t << " voltage is ";
 
-        if     ( Vt >= 1V )    std::cout << Vt ;
-        else if( Vt >= 1mV )   std::cout << voltage::mV<>{Vt};
-        else if( Vt >= 1uV )   std::cout << voltage::uV<>{Vt};
-        else if( Vt >= 1nV )   std::cout << voltage::nV<>{Vt};
-        else                   std::cout << voltage::pV<>{Vt};
-        std::cout << "\n";
-    }
+    if (Vt >= 1q_V)
+      std::cout << Vt;
+    else if (Vt >= 1q_mV)
+      std::cout << quantity_cast<millivolt>(Vt);
+    else if (Vt >= 1q_uV)
+      std::cout << quantity_cast<microvolt>(Vt);
+    else if (Vt >= 1q_nV)
+      std::cout << quantity_cast<nanovolt>(Vt);
+    else
+      std::cout << quantity_cast<picovolt>(Vt);
+    std::cout << "\n";
+  }
 }

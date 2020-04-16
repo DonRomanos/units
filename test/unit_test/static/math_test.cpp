@@ -21,15 +21,23 @@
 // SOFTWARE.
 
 #include "units/physical/si/area.h"
+#include "units/physical/si/velocity.h"
+#include "units/physical/international/area.h"
 #include "units/math.h"
 
 namespace {
 
   using namespace units::si::literals;
+  using namespace units::international::literals;
 
-  static_assert(std::is_same_v<decltype(pow<0>(2m)), std::int64_t>);
-  static_assert(std::is_same_v<decltype(pow<1>(2m)), decltype(2m)>);
-  static_assert(std::is_same_v<decltype(pow<2>(2m)), decltype(4m2)>);
-  static_assert(std::is_same_v<decltype(sqrt(4m2)), decltype(2m)>);
+  static_assert(std::is_same_v<decltype(pow<0>(2q_m)), std::int64_t>);
+  static_assert(std::is_same_v<decltype(pow<1>(2q_m)), decltype(2q_m)>);
+  static_assert(std::is_same_v<decltype(pow<2>(2q_m)), decltype(4q_m2)>);
+  static_assert(std::is_same_v<decltype(pow<2>(2q_km)), decltype(4q_km2)>);
+  static_assert(std::is_same_v<decltype(pow<2>(2q_ft)), decltype(4q_ft2)>);
+  static_assert(std::is_same_v<decltype(sqrt(4q_m2)), decltype(2q_m)>);
+  static_assert(std::is_same_v<decltype(sqrt(4q_km2)), decltype(2q_km)>);
+  static_assert(std::is_same_v<decltype(sqrt(4q_ft2)), decltype(2q_ft)>);
+
 
 }  // namespace

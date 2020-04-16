@@ -27,20 +27,25 @@
 
 namespace units::iau {
 
-struct light_year : named_scaled_unit<light_year,"ly",no_prefix,ratio<946073,100000,15>,si::metre> {};
-struct parsec : named_scaled_unit<parsec,"pc",no_prefix,ratio<1542839,500000,16>,si::metre> {};
-struct angstrom : named_scaled_unit<angstrom,"angstrom",no_prefix,ratio<1,1,-10>,si::metre> {};
+// https://en.wikipedia.org/wiki/Light-year
+struct light_year : named_scaled_unit<light_year, "ly", no_prefix, ratio<9460730472580800>, si::metre> {};
+
+// https://en.wikipedia.org/wiki/Parsec
+struct parsec : named_scaled_unit<parsec, "pc", si::prefix, ratio<30'856'775'814'913'673>, si::metre> {};
+
+// https://en.wikipedia.org/wiki/Angstrom
+struct angstrom : named_scaled_unit<angstrom, "angstrom", no_prefix, ratio<1, 1, -10>, si::metre> {};
 
 inline namespace literals {
 
-constexpr auto operator"" ly(unsigned long long l) { return si::length<light_year, std::int64_t>(l); }
-constexpr auto operator"" ly(long double l) { return si::length<light_year, long double>(l); }
+constexpr auto operator"" q_ly(unsigned long long l) { return si::length<light_year, std::int64_t>(l); }
+constexpr auto operator"" q_ly(long double l) { return si::length<light_year, long double>(l); }
 
-constexpr auto operator"" pc(unsigned long long l) { return si::length<parsec, std::int64_t>(l); }
-constexpr auto operator"" pc(long double l) { return si::length<parsec, long double>(l); }
+constexpr auto operator"" q_pc(unsigned long long l) { return si::length<parsec, std::int64_t>(l); }
+constexpr auto operator"" q_pc(long double l) { return si::length<parsec, long double>(l); }
 
-constexpr auto operator"" angstrom(unsigned long long l) { return si::length<angstrom, std::int64_t>(l); }
-constexpr auto operator"" angstrom(long double l) { return si::length<angstrom, long double>(l); }
+constexpr auto operator"" q_angstrom(unsigned long long l) { return si::length<angstrom, std::int64_t>(l); }
+constexpr auto operator"" q_angstrom(long double l) { return si::length<angstrom, long double>(l); }
 
 }  // namespace literals
 

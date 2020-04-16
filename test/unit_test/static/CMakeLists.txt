@@ -22,6 +22,7 @@
 
 add_library(unit_tests_static
     cgs_test.cpp
+    custom_rep_min_req_test.cpp
     custom_unit_test.cpp
     data_test.cpp
     dimension_op_test.cpp
@@ -32,6 +33,7 @@ add_library(unit_tests_static
     ratio_test.cpp
     si_test.cpp
     si_cgs_test.cpp
+    symbol_text_test.cpp
     type_list_test.cpp
     unit_test.cpp
     us_test.cpp

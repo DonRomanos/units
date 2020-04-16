@@ -24,6 +24,7 @@
 
 #include <units/bits/external/hacks.h>
 #include <units/concepts.h>
+#include <units/bits/ratio_maths.h>
 #include <cstdint>
 #include <numeric>
 #include <type_traits>
@@ -31,33 +32,6 @@
 #include <algorithm>
 
 namespace units {
-
-namespace detail {
-
-template<typename T>
-[[nodiscard]] constexpr T abs(T v) noexcept
-{
-  return v < 0 ? -v : v;
-}
-
-constexpr std::tuple<std::intmax_t, std::intmax_t, std::intmax_t>  normalize(std::intmax_t num, std::intmax_t den, std::intmax_t exp)
-{
-  std::intmax_t gcd = std::gcd(num, den);
-  num = num * (den < 0 ? -1 : 1) / gcd;
-  den = detail::abs(den) / gcd;
-
-  while (num % 10 == 0) {
-    num /= 10;
-    ++exp;
-  }
-  while (den % 10 == 0) {
-    den /= 10;
-    --exp;
-  }
-  return std::make_tuple(num, den, exp);
-}
-
-}  // namespace detail
 
 template<std::intmax_t Num, std::intmax_t Den = 1, std::intmax_t Exp = 0>
   requires(Den != 0)
@@ -69,11 +43,19 @@ struct ratio {
   static constexpr auto norm = detail::normalize(Num, Den, Exp);
 
  public:
-  static constexpr std::intmax_t num = std::get<0>(norm);
-  static constexpr std::intmax_t den = std::get<1>(norm);
-  static constexpr std::intmax_t exp = std::get<2>(norm);
+  static constexpr std::intmax_t num = norm[0];
+  static constexpr std::intmax_t den = norm[1];
+  static constexpr std::intmax_t exp = norm[2];
 
   using type = ratio<num, den, exp>;
+
+  static constexpr bool is_integral() {
+    if constexpr (exp < 0) {
+      return false;
+    } else {
+      return detail::gcdpow(num, exp, den) == den;
+    }
+  }
 };
 
 namespace detail {
@@ -81,15 +63,51 @@ namespace detail {
 template<intmax_t Num, intmax_t Den, intmax_t Exp>
 inline constexpr bool is_ratio<ratio<Num, Den, Exp>> = true;
 
-}  // namespace detail
+// unused, and align exponents process could be subject to overflow in extreme cases
+
+// template<Ratio R1, Ratio R2>
+// constexpr auto ratio_add_detail() {
+//   std::intmax_t num1 = R1::num;
+//   std::intmax_t num2 = R2::num;
+
+//   // align exponents
+//   std::intmax_t new_exp = R1::exp;
+//   if constexpr (R1::exp > R2::exp) {
+//     new_exp = R1::exp;
+//     while (new_exp > R2::exp) {
+//       num1 *= 10;
+//       --new_exp;
+//     }
+//   } else if constexpr (R1::exp < R2::exp) {
+//     new_exp = R2::exp;
+//     while (R1::exp < new_exp) {
+//       num2 *= 10;
+//       --new_exp;
+//     }
+//   }
+
+//   // common denominator
+//   std::intmax_t lcm_den = std::lcm(R1::den, R2::den);
+//   num1 = num1 * (lcm_den / R1::den);
+//   num2 = num2 * (lcm_den / R2::den);
+
+//   return std::array{num1 + num2, lcm_den, new_exp};
+// }
 
 
-// ratio_add
-// TODO implement ratio_add
+// template<Ratio R1, Ratio R2>
+// struct ratio_add_impl {
+//   static constexpr auto detail = ratio_add_detail<R1, R2>();
+//   using type = ratio<detail[0], detail[1], detail[2]>;
+// };
+}// namespace detail
+
+
+// ratio_add : not used
 // template<Ratio R1, Ratio R2>
 // using ratio_add = detail::ratio_add_impl<R1, R2>::type;
 
-// ratio_subtract
+// ratio_subtract : not used
 // TODO implement ratio_subtract
 // template<Ratio R1, Ratio R2>
 // using ratio_subtract = detail::ratio_subtract_impl<R1, R2>::type;
@@ -100,12 +118,12 @@ namespace detail {
 
 static constexpr std::intmax_t safe_multiply(std::intmax_t lhs, std::intmax_t rhs)
 {
-  constexpr std::uintmax_t c = std::uintmax_t(1) << (sizeof(std::intmax_t) * 4);
+  constexpr std::intmax_t c = std::uintmax_t(1) << (sizeof(std::intmax_t) * 4);
 
-  const std::uintmax_t a0 = detail::abs(lhs) % c;
-  const std::uintmax_t a1 = detail::abs(lhs) / c;
-  const std::uintmax_t b0 = detail::abs(rhs) % c;
-  const std::uintmax_t b1 = detail::abs(rhs) / c;
+  const std::intmax_t a0 = detail::abs(lhs) % c;
+  const std::intmax_t a1 = detail::abs(lhs) / c;
+  const std::intmax_t b0 = detail::abs(rhs) % c;
+  const std::intmax_t b1 = detail::abs(rhs) / c;
 
   Expects(a1 == 0 || b1 == 0);                               // overflow in multiplication
   Expects(a0 * b1 + b0 * a1 < (c >> 1));                     // overflow in multiplication
@@ -125,9 +143,9 @@ private:
                                                  safe_multiply(R1::den / gcd2, R2::den / gcd1),
                                                  R1::exp + R2::exp);
 
-  static constexpr std::intmax_t norm_num = std::get<0>(norm);
-  static constexpr std::intmax_t norm_den = std::get<1>(norm);
-  static constexpr std::intmax_t norm_exp = std::get<2>(norm);
+  static constexpr std::intmax_t norm_num = norm[0];
+  static constexpr std::intmax_t norm_den = norm[1];
+  static constexpr std::intmax_t norm_exp = norm[2];
 
 public:
   using type = ratio<norm_num, norm_den, norm_exp>;
@@ -163,7 +181,7 @@ using ratio_divide = detail::ratio_divide_impl<R1, R2>::type;
 
 namespace detail {
 
-template<typename R, std::size_t N>
+template<typename R, std::intmax_t N>
 struct ratio_pow_impl {
   using type = ratio_multiply<typename ratio_pow_impl<R, N - 1>::type, R>;
 };
@@ -180,30 +198,52 @@ struct ratio_pow_impl<R, 0> {
 
 }  // namespace detail
 
-template<Ratio R, std::size_t N>
+template<Ratio R, std::intmax_t N>
 using ratio_pow = detail::ratio_pow_impl<R, N>::type;
 
 // ratio_sqrt
 
 namespace detail {
 
-constexpr std::intmax_t sqrt_impl(std::intmax_t v, std::intmax_t l, std::intmax_t r)
+// sqrt_impl avoids overflow and recursion
+// from http://www.codecodex.com/wiki/Calculate_an_integer_square_root#C.2B.2B
+// if v >= place this will fail  (so we can't quite use the last bit)
+static constexpr std::intmax_t sqrt_impl(std::intmax_t v)
 {
-  if (l == r) return r;
+  // place = 0x4000 0000 for 32bit
+  // place = 0x4000 0000 0000 0000 for 64bit
+  std::intmax_t place = static_cast<std::intmax_t>(1) << (sizeof(std::intmax_t) * 8 - 2);
+  while (place > v) place /= 4;  // optimized by complier as place >>= 2
 
-  const auto mid = (r + l) / 2;
-  if (mid * mid >= v)
-    return sqrt_impl(v, l, mid);
-  else
-    return sqrt_impl(v, mid + 1, r);
+  std::intmax_t root = 0;
+  while (place) {
+    if (v >= root + place) {
+      v -= root + place;
+      root += place * 2;
+    }
+    root /= 2;
+    place /= 4;
+  }
+  return root;
 }
 
-static constexpr std::intmax_t sqrt_impl(std::intmax_t v) { return sqrt_impl(v, 1, v); }
+template<Ratio R>
+constexpr auto make_exp_even()
+{
+  if constexpr (R::exp % 2 == 0)
+    return std::array{R::num, R::den, R::exp}; // already even (incl zero)
+
+  // safely make exp even, so it can be divided by 2 for square root
+  if constexpr (R::exp > 0)
+    return std::array{R::num * 10, R::den, R::exp - 1};
+  else
+    return std::array{R::num, R::den * 10, R::exp + 1};
+}
 
 template<typename R>
 struct ratio_sqrt_impl {
-  // TODO  this is broken..need /2 logic on EXP
-  using type = ratio<detail::sqrt_impl(R::num), detail::sqrt_impl(R::den)>;
+  constexpr static auto even = detail::make_exp_even<R>();
+  using type = ratio<detail::sqrt_impl(even[0]), detail::sqrt_impl(even[1]), even[2] / 2>;
 };
 
 template<std::intmax_t Den>
@@ -223,9 +263,11 @@ namespace detail {
 // TODO: simplified
 template<typename R1, typename R2>
 struct common_ratio_impl {
-  static constexpr std::intmax_t gcd_num = std::gcd(R1::num, R2::num);
-  static constexpr std::intmax_t gcd_den = std::gcd(R1::den, R2::den);
-  using type = ratio<gcd_num, (R1::den / gcd_den) * R2::den, std::min(R1::exp, R2::exp)>;
+  static constexpr auto res = gcd_frac(R1::num, R1::den, R1::exp, R2::num, R2::den, R2::exp);
+  static constexpr std::intmax_t num = res[0];
+  static constexpr std::intmax_t den = res[1];
+  static constexpr std::intmax_t exp = res[2];
+  using type = ratio<num, den, exp>;
 };
 
 }  // namespace detail

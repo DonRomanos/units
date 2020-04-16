@@ -21,7 +21,6 @@
 # SOFTWARE.
 
 cmake_minimum_required(VERSION 3.8)
-#cmake_policy(SET CMP0076 NEW)
 
 project(units
     VERSION 0.5.0
@@ -32,7 +31,10 @@ project(units
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 
 # include common tools and workarounds
-include(common/cmake/tools)
+include(common/cmake/scripts)
+
+# use Conan configuration if available
+conan_init(cmake)
 
 # library definition
 add_library(units INTERFACE)
@@ -60,12 +62,18 @@ target_include_directories(units
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-    target_compile_options(units
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    target_link_libraries(units
         INTERFACE
-            -Wno-literal-suffix
-            -Wno-non-template-friend
+            CONAN_PKG::range-v3
     )
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(units
+    INTERFACE
+        -Wno-literal-suffix
+        -Wno-non-template-friend
+    )
+
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)
         target_compile_options(units
             INTERFACE
@@ -80,21 +88,11 @@ endif()
 add_library(mp::units ALIAS units)
 
 # installation info
-install(TARGETS units
-    EXPORT ${CMAKE_PROJECT_NAME}Targets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}  # TODO Remove when CMAKE 3.14
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}  # TODO Remove when CMAKE 3.14
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}  # TODO Remove when CMAKE 3.14
-    INCLUDES DESTINATION include
-)
+install_targets(units)
 install(DIRECTORY include/units
-    DESTINATION include
-    COMPONENT Devel
-)
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/units
     DESTINATION include
     COMPONENT Devel
 )
 
 # generate configuration files and install the package
-configure_and_install(../cmake/common/cmake/simple_package-config.cmake.in mp SameMajorVersion)
+configure_and_install(../cmake/common/cmake/simple-config.cmake.in mp SameMajorVersion)
